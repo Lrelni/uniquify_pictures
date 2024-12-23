@@ -4,9 +4,13 @@ import time
 import shutil
 import hashlib
 import operator
+from  multiprocessing import Pool
+
+# type: ignore is for VSCode to be quiet
 from PIL import Image # type: ignore
 from openpyxl import Workbook  # type: ignore
-from openpyxl.styles import Font, Fill # type: ignore
+from openpyxl.styles import Font # type: ignore
+from tqdm import tqdm # type: ignore
 
 DEBUG = False
 REPORT = False
@@ -15,10 +19,9 @@ PLACE = False
 INPUTPATH = "./uqinput"
 OUTPUTPATH = "./uqoutput"
 
-# scan /uqinput and get a list of pictures
-# sort the pictures by metadata/hash
-# traverse the list of pictures,
-#    adding each to a new list of unique if not equal to last picture
+# perhaps change this in the future to support other extensions
+EXTENSIONS = [x for x in Image.registered_extensions() if "." in x]
+MPLIMIT = 0 #test
 
 def scan_pictures(path):
     # scan path for all the pictures
@@ -26,6 +29,8 @@ def scan_pictures(path):
 
     raw_locations = []
     locations = []
+    other = []
+
     # traverse folder and get all the files
     print("Scanning "+path+"...")
     for (root, dirs, file) in os.walk(path):
@@ -36,32 +41,49 @@ def scan_pictures(path):
     raw_length = len(raw_locations)
     print(str(raw_length) + " files found.")
     print("Keeping image files and ignoring other files...")
-    for i in range(raw_length):
-        if check_image(raw_locations[i]):
-            locations.append(raw_locations[i])
-        print("["+str(i)+"/"+str(raw_length)+"]", end="\r")
-    print(str(raw_length)+"/"+str(raw_length)+" checked; "+str(len(locations))+" pictures in "+path)
 
-    return locations
+    for loc in tqdm(raw_locations):
+        if check_image(loc):
+            # if it is a picture
+            locations.append(loc)
+        else:
+            other.append(loc)
+    print(str(len(locations))+" pictures in "+path)
+
+    return (locations, other)
 
 def check_image(f):
-    try:
-        # open, test, and close
-        a = Image.open(f)
-        a.tobytes()
-        a.close()
-        return True
-    except:
+    if os.path.splitext(f)[1] in EXTENSIONS:
+        try:
+            open(f, "rb")
+            return True
+        except:
+            return False
+    else:
         return False
 
 def ikey(f):
-    # hash images for sorting
-    return hashlib.sha256(Image.open(f).tobytes()).hexdigest()
+    # hash images to make image keys for sorting
+    return hashlib.file_digest(open(f, "rb"), "sha256").hexdigest()
+
+def pkg_ikey(x):
+    # simply return a tuple of the path and its ikey
+    return (x, ikey(x))
 
 def cache_ikey(data):
     # takes in a list of paths (should be check_imaged) 
     # and outputs them as [ (location, ikey), etc. ]
-    return [(loc, ikey(loc)) for loc in data]
+    print("Computing sorting hashes...")
+
+    result = None;
+
+    if len(data) > MPLIMIT:
+        with Pool() as p:
+            result = list(p.map(pkg_ikey, tqdm(data)))
+    else:
+        result = map(pkg_ikey, tqdm(data))
+
+    return result
 
 def report(sorted_data, tstamp, du=False):
     # takes in a list of paths sorted by image hashes and writes them to xlsx
@@ -90,78 +112,62 @@ def report(sorted_data, tstamp, du=False):
     cur_row = 2
     len_data = len(sorted_data)
 
-    # handle first element. 
-    # if du, only put first element if it is a duplicate
-    if (not du) or (sorted_data[0][1] == sorted_data[1][1]):
-        real = os.path.realpath(sorted_data[0][0])
-        fp = os.path.split(real);
-        ws.cell(row=2, column=1, value=fp[1])
-        ws.cell(row=2, column=2, value=fp[0])
-        ws.cell(row=2, column=3, value='=HYPERLINK("'+real+'")')
+    def insert(path, nl=False):
+        # insert an entry into the spreadsheet
+        nonlocal cur_row, ws
 
+        cur_row += 1 if nl else 0 #newline before entry if nl is true
+        real = os.path.realpath(path)
+        fp = os.path.split(real)
+        ws.cell(row=cur_row, column=1, value=fp[1])
+        ws.cell(row=cur_row, column=2, value=fp[0])
+        ws.cell(row=cur_row, column=3, value='=HYPERLINK("'+real+'")')
         cur_row += 1
-    print("[1/"+str(len_data)+"]", end="\r")
-    
-    if du:
-        for i in range(1, len_data):
-            if sorted_data[i-1][1] == sorted_data[i][1]:
-                # confirmed to be a duplicate
-                real = os.path.realpath(sorted_data[i][0])
-                fp = os.path.split(real);
-                ws.cell(row=cur_row, column=1, value=fp[1])
-                ws.cell(row=cur_row, column=2, value=fp[0])
-                ws.cell(row=cur_row, column=3, value='=HYPERLINK("'+real+'")')
-                cur_row += 1
-            else:
-                # either start of a new chain or unique
-                if i == len_data - 1:
-                    # the final element, and not equal to i-1
-                    # it is unique
-                    pass
-                elif sorted_data[i+1][1] == sorted_data[i][1]:
-                    # start of a new chain
-                    cur_row += 1
-                    real = os.path.realpath(sorted_data[i][0])
-                    fp = os.path.split(real);
-                    ws.cell(row=cur_row, column=1, value=fp[1])
-                    ws.cell(row=cur_row, column=2, value=fp[0])
-                    ws.cell(row=cur_row, column=3, value='=HYPERLINK("'+real+'")')
-                    cur_row += 1
-                else:
-                    # unique
-                    pass
-            print("["+str(i+1)+"/"+str(len_data)+"]", end="\r")
 
+    if du:
+        for index, entry in enumerate(tqdm(sorted_data)):
+            if index == 0: # first element
+                if entry[1] == sorted_data[index + 1][1]:
+                    insert(entry[0])
+            elif index == len_data - 1: # last element
+                if entry[1] == sorted_data[index-1]:
+                    insert(entry[0])
+            else: # handle all in between
+                if sorted_data[index-1][1] == entry[1]:
+                    # confirmed to be a duplicate
+                    insert(entry[0])
+                else:
+                    # either start of new chain or unique
+                    if sorted_data[index+1][1] == entry[1]:
+                        insert(entry[0], nl=True) # new chain
+                    # if not equal to next element either,
+                    # then it is unique and should not be inserted
     else:
-        for i in range(1, len_data):
-            if sorted_data[i-1][1] != sorted_data[i][1]:
-                cur_row += 1 # insert empty line
-            real = os.path.realpath(sorted_data[i][0])
-            fp = os.path.split(real);
-            ws.cell(row=cur_row, column=1, value=fp[1])
-            ws.cell(row=cur_row, column=2, value=fp[0])
-            ws.cell(row=cur_row, column=3, value='=HYPERLINK("'+real+'")')
-            cur_row += 1
-            print("["+str(i+1)+"/"+str(len_data)+"]", end="\r")
+        for index, entry in enumerate(tqdm(sorted_data)):
+            if index == 0: # first element 
+                insert(entry[0])
+            else:
+                if entry[1] == sorted_data[index-1][1]:
+                    # same as last
+                    insert(entry[0])
+                else:
+                    insert(entry[0], nl=True)
 
     report_name = os.path.join(OUTPUTPATH, "uqreport_"+("duplicates_" if du else "")+str(tstamp)+".xlsx")
     wb.save(report_name)
-    print(str(len_data)+"/"+str(len_data)+" entered into report at "+report_name)
-
+    print("Report created at "+report_name)
 
 def sorted_cleaner(sorted_data):
     # takes in a list of paths sorted by image hashes and then uniquifies them
     print("Uniquifying pictures...")
-    unique = [sorted_data[0]]
-    len_data = len(sorted_data)
-    for i in range(1, len(sorted_data)):
-        if sorted_data[i-1][1] != sorted_data[i][1]:
-            unique.append(sorted_data[i])
-        print("["+str(i)+"/"+str(len_data)+"]", end="\r")
-    print(str(len(unique))+"/"+str(len_data)+" pictures are unique")
+    unique = []
+    for index, entry in enumerate(tqdm(sorted_data)):
+        if index == 0:
+            unique.append(entry)
+        elif sorted_data[index-1][1] != entry[1]:
+            unique.append(entry)
     return unique
-
-    
+ 
 def clean(folder):
     for filename in os.listdir(folder):
         file_path = os.path.join(folder, filename)
@@ -182,25 +188,37 @@ def main():
         print("Cleaning "+OUTPUTPATH+"...")
         clean(OUTPUTPATH)
 
-    sloc = sorted(cache_ikey(scan_pictures(INPUTPATH)),\
+    scanned = scan_pictures(INPUTPATH) # tuple (pictures, non-pictures)
+    print("")
+    sloc = sorted(cache_ikey(scanned[0]),\
         key=operator.itemgetter(1))
 
     timestamp = int(1000 * time.time())
-
+    print("")
     if REPORT:
         report(sloc, timestamp)
-    
+    print("")
     if DUREPORT:
         report(sloc, timestamp, du=True)
-
+    print("")
     if PLACE:
         unique = sorted_cleaner(sloc)
         print("Placing unique pictures into "+OUTPUTPATH)
-        for file in unique:
-            rel_path = os.path.relpath(file[0], INPUTPATH)
+
+        for entry in tqdm(unique):
+            rel_path = os.path.relpath(entry[0], INPUTPATH)
             dest = os.path.join(OUTPUTPATH, rel_path)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.copy2(file[0], dest)
+            shutil.copy2(entry[0], dest)
+
+        print("Placing other files (non-pictures) into "+OUTPUTPATH)
+
+        for file in tqdm(scanned[1]): # keep all non-pictures
+            rel_path = os.path.relpath(file, INPUTPATH)
+            dest = os.path.join(OUTPUTPATH, rel_path)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.copy2(file, dest)
+
 
 def debug():
     pass

@@ -1,6 +1,11 @@
 # uniquify_pictures
 A simple utility to identify and remove duplicate pictures in a folder through hashing comparison
 
+## Dependencies
+- PIL (may be removed in the future)
+- openpyxl
+- tqdm
+
 ## Command line options:
 ### -r
 If specified, will generate an xlsx spreadsheet report of all the pictures.

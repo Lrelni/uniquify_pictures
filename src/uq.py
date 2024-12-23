@@ -21,7 +21,7 @@ OUTPUTPATH = "./uqoutput"
 
 # perhaps change this in the future to support other extensions
 EXTENSIONS = [x for x in Image.registered_extensions() if "." in x]
-MPLIMIT = 0 #test
+MPLIMIT = 300
 
 def scan_pictures(path):
     # scan path for all the pictures

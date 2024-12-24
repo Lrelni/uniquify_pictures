@@ -2,7 +2,6 @@
 A simple utility to identify and remove duplicate pictures in a folder through hashing comparison
 
 ## Dependencies
-- PIL (may be removed in the future)
 - openpyxl
 - tqdm
 

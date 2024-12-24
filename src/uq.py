@@ -4,10 +4,8 @@ import time
 import shutil
 import hashlib
 import operator
-from  multiprocessing import Pool
+from multiprocessing import Pool
 
-# type: ignore is for VSCode to be quiet
-from PIL import Image # type: ignore
 from openpyxl import Workbook  # type: ignore
 from openpyxl.styles import Font # type: ignore
 from tqdm import tqdm # type: ignore
@@ -19,8 +17,15 @@ PLACE = False
 INPUTPATH = "./uqinput"
 OUTPUTPATH = "./uqoutput"
 
-# perhaps change this in the future to support other extensions
-EXTENSIONS = [x for x in Image.registered_extensions() if "." in x]
+# taken directly from PIL.Image.registered_extensions()
+EXTENSIONS = ['.blp', '.bmp', '.dib', '.bufr', '.cur', '.pcx', '.dcx', '.dds', 
+'.ps', '.eps', '.fit', '.fits', '.fli', '.flc', '.ftc', '.ftu', '.gbr', '.gif', 
+'.grib', '.h5', '.hdf', '.png', '.apng', '.jp2', '.j2k', '.jpc', '.jpf',
+'.jpx', '.j2c', '.icns', '.ico', '.im', '.iim', '.jfif', '.jpe', '.jpg',
+'.jpeg', '.mpg', '.mpeg', '.tif', '.tiff', '.mpo', '.msp', '.palm', '.pcd',
+'.pdf', '.pxr', '.pbm', '.pgm', '.ppm', '.pnm', '.pfm', '.psd', '.qoi',
+'.bw', '.rgb', '.rgba', '.sgi', '.ras', '.tga', '.icb', '.vda', '.vst', 
+'.webp', '.wmf', '.emf', '.xbm', '.xpm']
 MPLIMIT = 300
 
 def scan_pictures(path):

@@ -10,7 +10,6 @@ from openpyxl import Workbook  # type: ignore
 from openpyxl.styles import Font # type: ignore
 from tqdm import tqdm # type: ignore
 
-DEBUG = False
 REPORT = False
 DUREPORT = False
 PLACE = False
@@ -158,7 +157,8 @@ def report(sorted_data, tstamp, du=False):
                 else:
                     insert(entry[0], nl=True)
 
-    report_name = os.path.join(OUTPUTPATH, "uqreport_"+("duplicates_" if du else "")+str(tstamp)+".xlsx")
+    report_name = os.path.join(OUTPUTPATH, "uqreport_"+\
+    ("duplicates_" if du else "")+str(tstamp)+".xlsx")
     wb.save(report_name)
     print("Report created at "+report_name)
 
@@ -235,10 +235,6 @@ def main():
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             shutil.copy2(file, dest)
 
-
-def debug():
-    pass
-
 if __name__ == "__main__":
     if "-r" in sys.argv:
         REPORT = True
@@ -259,16 +255,11 @@ if __name__ == "__main__":
     else:
         print("No output directory specified with -o; defaulting to ./uqoutput")
     
-    if (not REPORT) and (not PLACE):
-        print("Warning: no recognized arguments specified.")
+    if (not REPORT) and (not PLACE) and (not DUREPORT):
+        print("Warning: no output will be generated.")
         print("Use -r to generate a report of all files.")
         print("Use -d to generate a report of duplicates.")
         print("Use -p to copy unique pictures into output.")
         print("Use -i [input path] to specify an input path.")
         print("Use -o [output path] to specify an output path.")
-
-    if DEBUG:
-        print("Running in debug mode.")
-        debug()
-    else:
-        main()
+    main()

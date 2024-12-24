@@ -185,10 +185,11 @@ def main():
     print("\n\u2588 uq.py: Remove duplicate pictures. \u2588\n")
 
     if PLACE or REPORT or DUREPORT:
+        os.makedirs(OUTPUTPATH, exist_ok=True)
         if len(os.listdir(OUTPUTPATH)) > 0: 
             # only clear if there are files
             istr = "Files already exist in the output path.\
-             Should the files be cleared? y/n: "
+ Should the files be cleared? y/n: "
             should_clear = input(istr)
             should_clear = True if should_clear == "Y" or should_clear == "y" else False
             if should_clear:

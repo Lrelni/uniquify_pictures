@@ -134,7 +134,7 @@ def report(sorted_data, tstamp, du=False):
                 if entry[1] == sorted_data[index + 1][1]:
                     insert(entry[0])
             elif index == len_data - 1: # last element
-                if entry[1] == sorted_data[index-1]:
+                if entry[1] == sorted_data[index-1][1]:
                     insert(entry[0])
             else: # handle all in between
                 if sorted_data[index-1][1] == entry[1]:
